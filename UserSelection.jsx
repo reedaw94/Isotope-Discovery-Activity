@@ -1,99 +1,131 @@
-
-import { useControls } from 'leva';
-import {nuclides} from './IsotopesList';
-import {elements} from './Elements';
-import { Text } from '@react-three/drei';
-
-
-// const R = '#f00'
-// const G = '#0f0'
-// const B = '#00f'
+import { useControls } from 'leva'
+import { nuclides } from './IsotopesList'
+import { elements } from './Elements'
+import { useMemo, useRef, useState } from 'react'
+import { useThree } from '@react-three/fiber'
+import { useDrag } from 'react-use-gesture'
 
 function NuclideTile(props) {
-  const { x, y, color, abbr} = props;
+  const [position, setPosition] = useState([props.x, props.y])
+  const { color, offset } = props
+  const canvasRef = useThree((state) => state.gl.domElement)
+  const meshRef = useRef()
+  const { size, viewport } = useThree()
+  const aspect = size.width / viewport.width
+
+  const bind = useDrag(
+    ({ offset: [x, y] }) => {
+      const [, , z] = position
+      setPosition([x / aspect, -y / aspect, z])
+    },
+    { pointerEvents: true }
+  )
+
+  const movedX = position[0] * (1 + offset)
+  const movedY = position[1]
+  const isMovedPositionCorrect = nuclides.some((nuclide) => {
+    return nuclide.x === movedX && nuclide.y === movedY
+  })
+
+  if (isMovedPositionCorrect) {
+    console.log('moved position matches correct location')
+  } else {
+    console.log('moved position does not match')
+  }
+
   return (
-    <mesh position={[x, y, 1]}>
-        <mesh >
-            <boxBufferGeometry args={[1, 1, .5]} />
-            <meshLambertMaterial color={color} />
-        </mesh>
-        <Text position={[x,y,0.7]}
-            fontSize={0.3} color="red">
-                {abbr}
-            </Text>
+    <mesh
+      ref={meshRef}
+      {...bind()}
+      position={[
+        Math.min(
+          Math.max(position[0] * (1 + offset), -1),
+          canvasRef.width - 50
+        ),
+        Math.min(Math.max(position[1], 0), canvasRef.height - 50),
+        1
+      ]}
+      onClick={(e) => {
+        if (bind().active) {
+          meshRef.current.material.color.set('white')
+          meshRef.current.material.needsUpdate = true
+          meshRef.current.scale.set(1.1, 1.1, 1.1)
+        } else {
+          meshRef.current.material.color.set(color)
+          meshRef.current.material.needsUpdate = true
+          meshRef.current.scale.set(1, 1, 1)
+        }
+      }}>
+      <boxBufferGeometry args={[1, 1, 0.5]} />
+      <meshLambertMaterial color={color} />
     </mesh>
-    
-  );
+  )
 }
 
-function UserSelection() {
-//   const elements = [
-//     { num: 1, id: 'H', name: 'Hydrogen', mass: '1.01', x: 1, y: 10 },
-//     { num: 2, id: 'He', name: 'Helium', mass: '4.00', x: 2, y: 10 },
-//     {num: 3, id:'Li', name:'Lithium', mass:'6.94', x:1, y:9,},
+export function UserSelection() {
+  const controls = useControls({
+    selectedElement: {
+      label: 'Elements',
+      value: elements[1].name,
+      options: elements.map((element) => element.name)
+    },
+    boxOffset: {
+      label: 'Box Offset',
+      value: 0.1,
+      min: 0,
+      max: 1,
+      step: 0.1
+    }
+  })
 
-//   ];
-<>
-<elements/>
-<nuclides/>
-</>
-//   const nuclides = [
-//     {x:0,y:1,abbr: 'H', color:G},
-//     {x:1,y:1,abbr: 'H', color:G},
-//     {x:2,y:1,abbr: 'H', color:B},
-//     {x:3,y:1,abbr: 'H', color:R},
-//     {x:4,y:1,abbr: 'H', color:R},
-//     {x:5,y:1,abbr: 'H', color:R},
-//     {x:6,y:1,abbr: 'H', color:R},
-//     //Helium
-//     {x:1,y:2, abbr: 'He',color:G},
-//     {x:2,y:2, abbr: 'He',color:G},
-//     {x:3,y:2, abbr: 'He',color:R},
-//     {x:4,y:2, abbr: 'He',color:R},
-//     {x:5,y:2, abbr: 'He',color:R},
-//     {x:6,y:2, abbr: 'He',color:R},
-//     {x:7,y:2, abbr: 'He',color:R},
-//     {x:8,y:2, abbr: 'He',color:R},
+  const selectedNuclides = useMemo(() => {
+    const selectedElement = elements.find(
+      (element) => element.name === controls.selectedElement
+    )
 
-//     {x:1,y:3, abbr: 'Li',color:R},
-//     {x:2,y:3, abbr: 'Li',color:R},
-//     {x:3,y:3, abbr: 'Li',color:G},
-//     {x:4,y:3, abbr: 'Li',color:G},
-//     {x:5,y:3, abbr: 'Li',color:R},
-//     {x:6,y:3, abbr: 'Li',color:R},
-//     {x:7,y:3, abbr: 'Li',color:R},
-//     {x:8,y:3, abbr: 'Li',color:R},
+    const selectedNuclides = nuclides.filter(
+      (nuclide) => nuclide.abbr === selectedElement.id
+    )
 
-//   ];
+    return selectedNuclides
+  }, [controls.selectedElement])
 
-const controls = useControls({
-    selectedElement: { label: "Elements", value: elements[1].name, options: elements },
-  });
+  // const handleReset = () => {
+  //   // resets tiles to orginal position
+  //   console.log('Reset button clicked')
+  // }
 
-  const selectedNuclides = nuclides.filter(
-    (nuclide) => nuclide.abbr === controls.selectedElement.id
-  );
+  // const handleSubmit = () => {
+  //   //submission logic
+  //   console.log('Submit button clicked')
+  // }
 
-//   const controls = useControls({
-//     elementIndex: {
-//         label: 'Element', value: 0, options: elements.map((element) => ({label:element.name})),
-//     },
-// });
-// let selectedNuclides = []
+  // return (
+  //   <>
+  //     {selectedNuclides.map((nuclide, index) => (
+  //       <NuclideTile
+  //         key={index}
+  //         x={index}
+  //         y={0}
+  //         color={nuclide.color}
+  //         offset={controls.boxOffset}
+  //       />
+  //     ))}
+  //     <div style={{ position: 'absolute', top: 10, left: 10 }}>
+  //       <button onClick={handleReset}>Reset</button>
+  //       <button onClick={handleSubmit}>Submit</button>
+  //     </div>
+  //   </>
+  // )
 
-// console.log(elements)
-
-  return (
-        selectedNuclides.map((nuclide, index) => ( 
-          <NuclideTile
-            key={index}
-            x={nuclide.x}
-            y={nuclide.y}
-            color={nuclide.color}
-            abbr={nuclide.abbr}
-          />
-        ))
-  );
+  return selectedNuclides.map((nuclide, index) => (
+    <NuclideTile
+      key={index}
+      x={index}
+      y={0}
+      color={nuclide.color}
+      offset={controls.boxOffset}
+    />
+  ))
 }
-
-export default UserSelection;
+export default UserSelection
